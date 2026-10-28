@@ -866,8 +866,7 @@ def profile_host(ip: str, ports: tuple[int, ...], timeout: float,
         "tls": tls_norm,
         "http": {
             "status": root_res.get("status", 0),
-            "headers": (http_info["results"].get("root") or {}).get(
-                "headers", {}) if False else {
+            "headers": {
                 "Server": http_info.get("server"),
                 "WWW-Authenticate": http_info.get("www_authenticate"),
                 "X-Powered-By": http_info.get("powered_by"),
