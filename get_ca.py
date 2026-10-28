@@ -257,21 +257,32 @@ def parse_extensions(ext_block):
             if len(items) < 2:
                 continue
             oid = oid_str(items[0][1])
-            payload = items[-1][1]
+            # Extension ::= SEQUENCE { OID, critical BOOLEAN DEFAULT FALSE,
+            #   extnValue OCTET STRING }. El payload del OID va SIEMPRE envuelto
+            #   en OCTET STRING (tag 0x04); desencapsularlo una vez. Buscar el
+            #   0x04 por etiqueta y no por indice: con critical=TRUE el ultimo
+            #   item sigue siendo el OCTET STRING pero el penultimo es BOOLEAN.
+            payload = None
+            for t, v in items:
+                if t == 0x04:
+                    payload = children(v)[0][1]        # desenvuelve extnValue
+                    break
+            if payload is None:
+                continue
             try:
                 if oid == OID_SKI:
-                    key = children(payload)[0][1]      # OCTET STRING interior
-                    exts["ski"] = children(key)[0][1].hex().upper()
+                    exts["ski"] = payload.hex().upper()
                 elif oid == OID_AKI:
-                    inner = children(children(payload)[0][1])
-                    if inner and inner[0][0] == 0x86:  # keyIdentifier [0]
-                        exts["aki"] = inner[0][1].hex().upper()
+                    for tag, val in children(payload):  # keyIdentifier [0]/[1]
+                        if tag in (0x80, 0x81, 0x86):
+                            exts["aki"] = val.hex().upper()
+                            break
                 elif oid == OID_BASIC_CONSTRAINTS:
-                    c = children(children(payload)[0][1])
+                    c = children(payload)
+                    # SEQUENCE vacio == CA:FALSE implicito
                     exts["ca"] = bool(c) and c[0][0] == 0x01 and c[0][1] != b"\x00"
                 elif oid == OID_KEY_USAGE:
-                    bits = children(payload)[0][1]     # BIT STRING
-                    first = bits[1] if len(bits) > 1 else 0
+                    first = payload[1] if len(payload) > 1 else 0  # BIT STRING
                     ku = []
                     if first & 0x20:
                         ku.append("keyCertSign")
@@ -281,7 +292,7 @@ def parse_extensions(ext_block):
                         ku.append("digitalSignature")
                     exts["key_usage"] = ku
                 elif oid == OID_SAN:
-                    for _, g in children(children(payload)[0][1]):
+                    for _, g in children(payload):
                         if g[0] == 0x82:               # dNSName [2]
                             exts.setdefault("san", []).append(
                                 g[1].decode("ascii", "replace"))
@@ -790,8 +801,15 @@ def verify_candidate(ca_info, leaf_info, expected_aki, now=None):
     res = {}
     res["subject_issuer_match"] = bool(leaf_info) and \
         name_to_str(ca_info["subject"]) == name_to_str(leaf_info["issuer"])
-    res["aki_ski_match"] = bool(leaf_info) and leaf_info.get("aki") and \
-        ca_info.get("ski") and hexnorm(leaf_info["aki"]) == hexnorm(ca_info["ski"])
+    # aki_ski_match: si la hoja no lleva AKI (emitentes minimos, ej. CA
+    # autogenerada sin -copy_extensions), el emparejado se sustituye por el
+    # pin expected_aki vs SKI de la CA. Nunca se acepta con AKI en desacuerdo.
+    if leaf_info and leaf_info.get("aki") and ca_info.get("ski"):
+        res["aki_ski_match"] = hexnorm(leaf_info["aki"]) == hexnorm(ca_info["ski"])
+    elif expected_aki and ca_info.get("ski"):
+        res["aki_ski_match"] = hexnorm(expected_aki) == hexnorm(ca_info["ski"])
+    else:
+        res["aki_ski_match"] = False
     res["ca_true"] = bool(ca_info.get("ca"))
     res["self_signed"] = bool(ca_info.get("self_signed"))
     res["valid_dates"] = bool(ca_info.get("not_before") and ca_info.get("not_after")
@@ -875,7 +893,12 @@ def write_outputs(outdir, report, selected, all_cands, vectors_tried, notes):
             f.write(pem_from_der(selected["der"]))
     ser = (report.get("serial")
              or (attr(selected["info"]["subject"], "OU") if selected else None))
+    # El OU del issuer es el serial del dispositivo; si el informe no traia
+    # modelo, se deriva del prefijo del serial (FG120G... -> 120G).
     model = report.get("model")
+    if not model and isinstance(ser, str):
+        m = SERIAL_MODEL_RE.match(ser)
+        model = m.group(1) if m else None
     nickname = f"Fortinet_CA_{model}" if model else "Fortinet_CA"
     doc = {
         "schema_version": SCHEMA_VERSION,
