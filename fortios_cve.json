@@ -1,0 +1,40 @@
+{
+  "FortiGate": [
+    {
+      "cve": "CVE-2018-13379",
+      "range": ">=5.6 <6.0.11 || >=6.2.0 <6.2.3 || >=6.4.0 <6.4.2",
+      "cvss": 7.2,
+      "auth": "none",
+      "type": "path-traversal",
+      "vector": "/api/v3?method=get&sys_name=SSL-VPN&obj_name=/../../proc/self/../etc/passwd (leak de credenciales via web-login)",
+      "note": "Rango aproximado segun Fortinet PSIRT; verificar contra advisory oficial antes de explotar."
+    },
+    {
+      "cve": "CVE-2022-42475",
+      "range": ">=7.2.0 <7.2.5 || >=7.4.0 <7.4.3 || >=6.4.14 <6.4.15",
+      "cvss": 9.8,
+      "auth": "none",
+      "type": "heap-buffer-overflow",
+      "vector": "fortiguard/sslvpnd heap overflow pre-auth en /remote/login",
+      "note": "Stack overflow reportado por Volexity; rango confirmado por Fortinet PSIRT."
+    },
+    {
+      "cve": "CVE-2023-27997",
+      "range": ">=7.4.0 <7.4.3 || >=7.2.5 <7.2.6",
+      "cvss": 9.6,
+      "auth": "none",
+      "type": "heap-buffer-overflow",
+      "vector": "vpnd sslvpnd dos/rce pre-auth",
+      "note": "Rango aproximado; contrastar con FG-IR-23-050."
+    },
+    {
+      "cve": "CVE-2024-21762",
+      "range": ">=6.4.0 <7.2.9 || >=7.4.0 <7.4.7 || >=7.6.0 <7.6.1",
+      "cvss": 9.1,
+      "auth": "none",
+      "type": "out-of-write",
+      "vector": "admin daemons: overflow en el manejo de peticiones HTTP hacia el mgmt interface",
+      "note": "Explotada in-the-wild (CISA KEV). Rango segun FG-IR-24-015."
+    }
+  ]
+}
